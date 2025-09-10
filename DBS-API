@@ -1,1 +1,73 @@
+import urllib.parse
+import webbrowser
+import requests
+
+# DBS Sandbox OAuth endpoints
+AUTH_URL  = "https://www.dbs.com/sandbox/api/sg/v1/oauth/authorize"
+TOKEN_URL = "https://www.dbs.com/sandbox/api/sg/v1/oauth/token"
+
+
+def authorize(client_id: str, redirect_uri: str, scopes: list[str]):
+    params = {
+        "response_type": "code",
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "scope": " ".join(scopes),
+        "state": "csrf123",  # anti-CSRF state token you should verify
+    }
+    url = f"{AUTH_URL}?{urllib.parse.urlencode(params)}"
+    print("Open the following URL in your browser to authorize:")
+    print(url)
+    webbrowser.open(url)  # optional: launches the URL automatically
+
+
+def exchange_code_for_token(code: str, client_id: str, client_secret: str, redirect_uri: str) -> dict:
+    data = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": redirect_uri,
+        "client_id": client_id,
+        "client_secret": client_secret,
+    }
+    r = requests.post(TOKEN_URL, data=data, timeout=30)
+    r.raise_for_status()
+    return r.json()
+
+
+def call_protected(api_url: str, access_token: str) -> dict:
+    headers = {"Authorization": f"Bearer {access_token}"}
+    r = requests.get(api_url, headers=headers, timeout=30)
+    r.raise_for_status()
+    return r.json()
+
+
+def main():
+    # Prompt user for credentials and redirect
+    client_id = input("Enter your DBS client ID: ").strip()
+    client_secret = input("Enter your DBS client secret: ").strip()
+    redirect_uri = input("Enter your redirect URI (e.g., https://yourapp.example.com/callback): ").strip()
+
+    # Replace scopes with those actually approved for your app
+    scopes = ["fund_transfer", "deposit"]
+
+    # Step 1: Get user's consent
+    authorize(client_id, redirect_uri, scopes)
+
+    # Step 2: Paste the code received after the user is redirected back
+    code = input("Enter the authorization code from the redirect: ").strip()
+    tokens = exchange_code_for_token(code, client_id, client_secret, redirect_uri)
+    print("Token response:", tokens)
+
+    # Step 3: Use the token to call a protected resource
+    access_token = tokens["access_token"]
+    # Replace with the actual DBS API endpoint you wish to call
+    resource_url = "https://www.dbs.com/sandbox/api/sg/v1/some-protected-endpoint"
+    data = call_protected(resource_url, access_token)
+    print("Protected resource response:", data)
+
+
+if __name__ == "__main__":
+    main()
+
+
 
